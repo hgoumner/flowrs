@@ -13,7 +13,7 @@ pub use static_token::StaticTokenProvider;
 use async_trait::async_trait;
 use reqwest::RequestBuilder;
 
-use crate::auth::{AirflowAuth, BasicAuth, CookieSource, TokenSource};
+use crate::auth::{AirflowAuth, BasicAuth, TokenSource};
 #[cfg(feature = "astronomer")]
 use crate::managed_services::astronomer::AstronomerAuthProvider;
 #[cfg(feature = "composer")]
@@ -84,6 +84,7 @@ pub fn create_auth_provider(auth: &AirflowAuth) -> Result<Box<dyn AuthProvider>>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::CookieSource;
 
     #[test]
     fn test_create_auth_provider_basic() {
