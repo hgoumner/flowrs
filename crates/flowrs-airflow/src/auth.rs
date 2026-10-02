@@ -6,6 +6,9 @@ use serde::{Deserialize, Serialize};
 pub enum AirflowAuth {
     Basic(BasicAuth),
     Token(TokenSource),
+    /// Browser session cookie, e.g. for instances behind SSO where neither basic
+    /// auth nor API tokens are available.
+    Cookie(CookieSource),
     Conveyor,
     Mwaa(MwaaAuth),
     Astronomer(AstronomerAuth),
@@ -41,6 +44,35 @@ impl std::fmt::Debug for TokenSource {
             TokenSource::Static { .. } => f
                 .debug_struct("Static")
                 .field("token", &"<redacted>")
+                .finish(),
+        }
+    }
+}
+
+/// Where to get the `Cookie` header value from.
+///
+/// The value may be a bare session cookie value (sent as `session=<value>`,
+/// the cookie name Airflow 2.x uses) or a full `name=value; name2=value2`
+/// cookie string.
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(untagged)]
+pub enum CookieSource {
+    /// A shell command that prints the cookie on stdout (re-run periodically).
+    Command {
+        cmd: String,
+    },
+    Static {
+        cookie: String,
+    },
+}
+
+impl std::fmt::Debug for CookieSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CookieSource::Command { cmd } => f.debug_struct("Command").field("cmd", cmd).finish(),
+            CookieSource::Static { .. } => f
+                .debug_struct("Static")
+                .field("cookie", &"<redacted>")
                 .finish(),
         }
     }

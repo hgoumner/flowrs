@@ -60,7 +60,27 @@ If you're self-hosting an Airflow instance, or your favorite managed service is 
 
 This creates an entry in your configuration file at `$XDG_CONFIG_HOME/flowrs/config.toml` (following the XDG Base Directory Specification, which defaults to `~/.config/flowrs/config.toml`). For backwards compatibility, flowrs also reads from `~/.flowrs` if the XDG location doesn't exist. If you have multiple Airflow servers configured, you can easily switch between them in `flowrs` configuration screen.
 
-Flowrs supports authenticating with HTTP Basic Auth or using bearer tokens. When selecting the bearer token option, you can either provide a static token or a command that generates a token.
+Flowrs supports authenticating with HTTP Basic Auth, using bearer tokens, or with a browser session cookie. When selecting the bearer token option, you can either provide a static token or a command that generates a token.
+
+#### Session cookie authentication
+
+For Airflow instances behind SSO, where neither basic auth nor API tokens are available, flowrs can reuse the session cookie of your browser (Airflow 2.x with the `airflow.api.auth.backend.session` API auth backend). Log in to the Airflow web UI, open your browser's developer tools (Application/Storage > Cookies), copy the value of the `session` cookie, and select `Cookie` as the authentication type in `flowrs config add`. You can either paste the cookie value, or provide a command that prints it (re-run every 60 seconds, so an updated cookie is picked up without editing the config).
+
+The value can be a bare cookie value (sent as `session=<value>`) or a full `name=value; name2=value2` cookie string. The resulting configuration looks like:
+
+```toml
+[[servers]]
+name = "my-airflow"
+endpoint = "https://airflow.example.com/"
+version = "V2"
+
+[servers.auth.Cookie]
+cookie = "<session cookie value>"
+# or, instead of `cookie`:
+# cmd = "cat ~/.airflow-session-cookie"
+```
+
+The session cookie expires together with your web UI session; when requests start failing with 401, copy a fresh cookie (or update the file/command output).
 
 ### Themes
 
