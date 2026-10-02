@@ -4,7 +4,8 @@ pub mod theme;
 // Auth and server config types are owned by flowrs-airflow; re-export them at
 // the crate root so callers get one ergonomic import path.
 pub use flowrs_airflow::{
-    AirflowAuth, AirflowConfig, AirflowVersion, BasicAuth, GccConfig, ManagedService, TokenSource,
+    AirflowAuth, AirflowConfig, AirflowVersion, BasicAuth, CookieSource, GccConfig, ManagedService,
+    TokenSource,
 };
 pub use paths::ConfigPaths;
 pub use theme::Theme;
@@ -248,6 +249,48 @@ password = "airflow"
 
         let serialized_config = config.to_str().unwrap();
         assert_eq!(serialized_config.trim(), TEST_CONFIG_CONVEYOR.trim());
+    }
+
+    const TEST_CONFIG_COOKIE: &str = r#"
+[[servers]]
+name = "static"
+endpoint = "https://airflow.example.com/"
+version = "V2"
+
+[servers.auth.Cookie]
+cookie = "abc"
+
+[[servers]]
+name = "command"
+endpoint = "https://airflow.example.com/"
+
+[servers.auth.Cookie]
+cmd = "cat cookie.txt"
+    "#;
+
+    #[test]
+    fn test_parse_and_roundtrip_cookie_auth() {
+        use flowrs_airflow::CookieSource;
+
+        let config = FlowrsConfig::parse_toml(TEST_CONFIG_COOKIE.trim()).unwrap();
+        assert!(matches!(
+            &config.servers[0].auth,
+            AirflowAuth::Cookie(CookieSource::Static { cookie }) if cookie == "abc"
+        ));
+        assert!(matches!(
+            &config.servers[1].auth,
+            AirflowAuth::Cookie(CookieSource::Command { cmd }) if cmd == "cat cookie.txt"
+        ));
+
+        let reparsed = FlowrsConfig::parse_toml(&config.to_str().unwrap()).unwrap();
+        assert!(matches!(
+            &reparsed.servers[0].auth,
+            AirflowAuth::Cookie(CookieSource::Static { cookie }) if cookie == "abc"
+        ));
+        assert!(matches!(
+            &reparsed.servers[1].auth,
+            AirflowAuth::Cookie(CookieSource::Command { .. })
+        ));
     }
 
     #[test]

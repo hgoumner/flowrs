@@ -2,12 +2,14 @@ use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{Args, Parser};
-use flowrs_config::{FlowrsConfig, ManagedService, Theme};
+use flowrs_config::{AirflowAuth, CookieSource, FlowrsConfig, ManagedService, Theme};
 use inquire::validator::Validation;
+use log::info;
 use strum::Display;
 use strum::EnumIter;
+use strum::IntoEnumIterator;
 use url::Url;
 
 #[derive(Parser, Debug)]
@@ -169,6 +171,64 @@ pub struct UpdateCommand {
 pub enum ConfigOption {
     BasicAuth,
     Token(Command),
+    Cookie,
+}
+
+#[derive(EnumIter, Debug, Display, Clone, Copy)]
+enum CookieOption {
+    #[strum(to_string = "Paste cookie value")]
+    Static,
+    #[strum(to_string = "Command that prints the cookie")]
+    Command,
+}
+
+/// Prompt for a browser session cookie (pasted value or helper command).
+pub fn prompt_cookie_auth() -> Result<AirflowAuth> {
+    let choice = inquire::Select::new("cookie source", CookieOption::iter().collect())
+        .with_help_message(
+            "Copy the `session` cookie from your browser's dev tools (Application/Storage > Cookies)",
+        )
+        .prompt()?;
+    let source = match choice {
+        CookieOption::Static => {
+            let cookie = inquire::Password::new("cookie")
+                .with_help_message("Bare `session` value, or `name=value; name2=value2`")
+                .with_display_toggle_enabled()
+                .without_confirmation()
+                .with_validator(inquire::required!("cookie must not be empty"))
+                .prompt()?;
+            CookieSource::Static { cookie }
+        }
+        CookieOption::Command => {
+            let cmd = inquire::Text::new("cmd")
+                .with_help_message("Shell command printing the cookie; re-run every 60s")
+                .prompt()?;
+            let cookie = run_helper(&cmd)?;
+            if cookie.is_empty() {
+                anyhow::bail!("cookie command printed nothing: {cmd}");
+            }
+            CookieSource::Command { cmd }
+        }
+    };
+    Ok(AirflowAuth::Cookie(source))
+}
+
+/// Run a credential helper command and return its trimmed stdout.
+pub fn run_helper(cmd: &str) -> Result<String> {
+    info!("🔑 Running command: {cmd}");
+    let output = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .output()
+        .with_context(|| format!("Failed to execute command: {cmd}"))?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "command failed with exit code {:?}: {}",
+            output.status.code(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(String::from_utf8(output.stdout)?.trim().to_string())
 }
 
 #[derive(Parser, Debug)]

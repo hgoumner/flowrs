@@ -5,7 +5,7 @@ use log::info;
 use strum::IntoEnumIterator;
 
 use super::model::AddCommand;
-use crate::commands::config::model::{validate_endpoint, ConfigOption};
+use crate::commands::config::model::{prompt_cookie_auth, validate_endpoint, ConfigOption};
 use anyhow::{Context, Result};
 use flowrs_config::{
     AirflowAuth, AirflowConfig, AirflowVersion, BasicAuth, FlowrsConfig, TokenSource,
@@ -77,6 +77,15 @@ impl AddCommand {
                     insecure,
                 }
             }
+            ConfigOption::Cookie => AirflowConfig {
+                name,
+                endpoint,
+                auth: prompt_cookie_auth()?,
+                managed: None,
+                version,
+                timeout_secs: 30,
+                insecure,
+            },
         };
 
         let path = self.file.as_ref().map(PathBuf::from);

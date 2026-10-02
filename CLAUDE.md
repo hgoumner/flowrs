@@ -45,11 +45,11 @@ flowrs-tui      (binary: TUI app, view models, UI, commands)
 
 ### flowrs-airflow (`crates/flowrs-airflow/`)
 Self-contained Airflow API client library. Has no dependencies on other workspace crates.
-- `src/auth.rs`: Auth types (`AirflowAuth`, `BasicAuth`, `TokenSource`, `MwaaAuth`, `AstronomerAuth`, `ComposerAuth`)
+- `src/auth.rs`: Auth types (`AirflowAuth`, `BasicAuth`, `TokenSource`, `CookieSource`, `MwaaAuth`, `AstronomerAuth`, `ComposerAuth`)
 - `src/config.rs`: Server config types (`AirflowConfig`, `AirflowVersion`, `ManagedService`, `GccConfig`)
 - `src/client/`: HTTP client layer
   - `base.rs`: `BaseClient` wrapping reqwest with auth
-  - `auth/`: `AuthProvider` trait and implementations (basic, token, managed service providers)
+  - `auth/`: `AuthProvider` trait and implementations (basic, token, cookie, managed service providers)
   - `v1/`: Airflow v2 API client (`V1Client`, uses `/api/v1`), with response models in `v1/model/`
   - `v2/`: Airflow v3 API client (`V2Client`, uses `/api/v2`), with response models in `v2/model/`
 - `src/managed_services/`: Managed service discovery (Conveyor, MWAA, Astronomer, Cloud Composer), feature-gated
@@ -122,7 +122,7 @@ Each panel has:
 - `flowrs-airflow` returns `flowrs_airflow::AirflowError` (`error.rs`) from every fallible operation; the TUI converts it into `anyhow::Error` at the `FlowrsClient` boundary
 - `FlowrsClient` (in `src/airflow/client/`) wraps these and exposes the TUI-facing operations as inherent async methods, dispatching on the API version internally
 - From impls in `FlowrsClient` convert API response types to TUI view models
-- Auth providers handle Basic, Token, Conveyor, MWAA, Astronomer, and Composer authentication
+- Auth providers handle Basic, Token, Cookie, Conveyor, MWAA, Astronomer, and Composer authentication
 
 ### Data Flow
 1. User presses key → `EventGenerator` produces `FlowrsEvent`

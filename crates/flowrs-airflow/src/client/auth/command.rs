@@ -17,66 +17,66 @@ use crate::error::{AirflowError, Result};
 /// lifetimes.
 const TOKEN_TTL: Duration = Duration::from_secs(60);
 
-pub struct CommandTokenProvider {
+/// A helper shell command whose trimmed stdout is a credential, cached for
+/// `TOKEN_TTL`. Shared by the token and cookie command providers.
+pub(super) struct CachedCommand {
     cmd: String,
-    /// Cached `(token, fetched_at)`, refreshed once `TOKEN_TTL` elapses. The
+    /// Used in log and error messages, e.g. "Token" or "Cookie".
+    kind: &'static str,
+    /// Cached `(secret, fetched_at)`, refreshed once `TOKEN_TTL` elapses. The
     /// async mutex also single-flights concurrent refreshes.
     cached: tokio::sync::Mutex<Option<(String, Instant)>>,
 }
 
-impl CommandTokenProvider {
-    pub fn new(cmd: String) -> Self {
+impl CachedCommand {
+    pub(super) fn new(cmd: String, kind: &'static str) -> Self {
         Self {
             cmd,
+            kind,
             cached: tokio::sync::Mutex::new(None),
         }
     }
 
-    /// Run the helper command and return its trimmed token output.
+    pub(super) fn cmd(&self) -> &str {
+        &self.cmd
+    }
+
+    /// Run the helper command and return its trimmed output.
     ///
     /// Uses `anyhow` internally for the layered context messages; the chain is
-    /// flattened into `AirflowError::Auth` at the trait boundary.
-    async fn fetch_token(&self) -> anyhow::Result<String> {
+    /// flattened into `AirflowError::Auth` by [`CachedCommand::get`].
+    async fn fetch(&self) -> anyhow::Result<String> {
         let cmd = self.cmd.clone();
+        let kind = self.kind;
         let output = tokio::task::spawn_blocking(move || {
             std::process::Command::new("sh")
                 .arg("-c")
                 .arg(&cmd)
                 .output()
-                .context("Failed to run token helper command")
+                .with_context(|| format!("Failed to run {} helper command", kind.to_lowercase()))
         })
         .await
-        .context("Token helper task panicked")??;
+        .with_context(|| format!("{kind} helper task panicked"))??;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let stdout = String::from_utf8_lossy(&output.stdout);
             return Err(anyhow::anyhow!(
-                "Token helper command failed with exit code {:?}\nstdout: {}\nstderr: {}",
+                "{} helper command failed with exit code {:?}\nstdout: {}\nstderr: {}",
+                kind,
                 output.status.code(),
                 stdout,
                 stderr
             ));
         }
 
-        let token =
-            String::from_utf8(output.stdout).context("Token helper returned invalid UTF-8")?;
-        Ok(token.trim().trim_matches('"').to_string())
+        let secret = String::from_utf8(output.stdout)
+            .with_context(|| format!("{kind} helper returned invalid UTF-8"))?;
+        Ok(secret.trim().trim_matches('"').to_string())
     }
-}
 
-impl fmt::Debug for CommandTokenProvider {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Show the configured command, never the cached token.
-        f.debug_struct("CommandTokenProvider")
-            .field("cmd", &self.cmd)
-            .finish_non_exhaustive()
-    }
-}
-
-#[async_trait]
-impl AuthProvider for CommandTokenProvider {
-    async fn authenticate(&self, request: RequestBuilder) -> Result<RequestBuilder> {
+    /// Return the cached value, re-running the command once it is older than `TOKEN_TTL`.
+    pub(super) async fn get(&self, provider: &'static str) -> Result<String> {
         let mut cached = self.cached.lock().await;
 
         let fresh = cached
@@ -84,15 +84,46 @@ impl AuthProvider for CommandTokenProvider {
             .is_some_and(|(_, fetched)| fetched.elapsed() < TOKEN_TTL);
 
         if !fresh {
-            info!("🔑 Token Auth (command): refreshing via {}", self.cmd);
-            let token = self
-                .fetch_token()
+            info!(
+                "🔑 {} Auth (command): refreshing via {}",
+                self.kind, self.cmd
+            );
+            let secret = self
+                .fetch()
                 .await
-                .map_err(|e| AirflowError::auth("token command", &e))?;
-            *cached = Some((token, Instant::now()));
+                .map_err(|e| AirflowError::auth(provider, &e))?;
+            *cached = Some((secret, Instant::now()));
         }
 
-        let (token, _) = cached.as_ref().expect("token cached above");
+        Ok(cached.as_ref().expect("secret cached above").0.clone())
+    }
+}
+
+pub struct CommandTokenProvider {
+    command: CachedCommand,
+}
+
+impl CommandTokenProvider {
+    pub fn new(cmd: String) -> Self {
+        Self {
+            command: CachedCommand::new(cmd, "Token"),
+        }
+    }
+}
+
+impl fmt::Debug for CommandTokenProvider {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Show the configured command, never the cached token.
+        f.debug_struct("CommandTokenProvider")
+            .field("cmd", &self.command.cmd())
+            .finish_non_exhaustive()
+    }
+}
+
+#[async_trait]
+impl AuthProvider for CommandTokenProvider {
+    async fn authenticate(&self, request: RequestBuilder) -> Result<RequestBuilder> {
+        let token = self.command.get("token command").await?;
         Ok(request.bearer_auth(token))
     }
 }
