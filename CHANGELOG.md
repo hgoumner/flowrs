@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.2-cookie.3] - 2026-10-16
+
+### Fixed
+
+- Task lists now load when Airflow 2 returns triggerer jobs with a null DAG ID or executor class.
+
 ## [0.15.2](https://github.com/jvanbuel/flowrs/compare/flowrs-tui-v0.15.1...flowrs-tui-v0.15.2) - 2026-09-07
 
 ### Other

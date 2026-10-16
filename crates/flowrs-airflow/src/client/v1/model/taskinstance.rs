@@ -82,7 +82,7 @@ pub struct TriggerResponse {
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JobResponse {
     pub id: i64,
-    pub dag_id: String,
+    pub dag_id: Option<String>,
     pub state: String,
     pub job_type: String,
     #[serde(with = "time::serde::iso8601::option")]
@@ -91,7 +91,68 @@ pub struct JobResponse {
     pub end_date: Option<OffsetDateTime>,
     #[serde(with = "time::serde::iso8601::option")]
     pub latest_heartbeat: Option<OffsetDateTime>,
-    pub executor_class: String,
+    pub executor_class: Option<String>,
     pub hostname: String,
     pub unixname: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TaskInstanceCollectionResponse;
+    use serde_json::json;
+
+    #[test]
+    fn task_instances_accept_nullable_triggerer_job_fields() {
+        let mut response = json!({
+            "task_instances": [{
+                "task_id": "waiting_task",
+                "dag_id": "example_dag",
+                "dag_run_id": "scheduled__2026-10-15T02:00:00+00:00",
+                "execution_date": "2026-10-15T02:00:00Z",
+                "start_date": null,
+                "end_date": null,
+                "duration": null,
+                "state": "deferred",
+                "try_number": 1,
+                "map_index": -1,
+                "max_tries": 0,
+                "hostname": "",
+                "unixname": "",
+                "pool": "default_pool",
+                "pool_slots": 1,
+                "queued_when": null,
+                "rendered_fields": {},
+                "triggerer_job": {
+                    "id": 1,
+                    "dag_id": null,
+                    "state": "running",
+                    "job_type": "TriggererJob",
+                    "start_date": "2026-10-15T01:00:00Z",
+                    "end_date": null,
+                    "latest_heartbeat": "2026-10-15T02:00:00Z",
+                    "executor_class": null,
+                    "hostname": "triggerer",
+                    "unixname": "airflow"
+                }
+            }],
+            "total_entries": 1
+        });
+        let parsed: TaskInstanceCollectionResponse =
+            serde_json::from_value(response.clone()).unwrap();
+        let job = parsed.task_instances[0].triggerer_job.as_ref().unwrap();
+        assert_eq!(job.dag_id, None);
+        assert_eq!(job.executor_class, None);
+
+        response["task_instances"][0]["triggerer_job"]["dag_id"] = json!("example_dag");
+        response["task_instances"][0]["triggerer_job"]["executor_class"] = json!("LocalExecutor");
+        let parsed: TaskInstanceCollectionResponse =
+            serde_json::from_value(response.clone()).unwrap();
+        let job = parsed.task_instances[0].triggerer_job.as_ref().unwrap();
+        assert_eq!(job.dag_id.as_deref(), Some("example_dag"));
+        assert_eq!(job.executor_class.as_deref(), Some("LocalExecutor"));
+
+        response["task_instances"][0]["triggerer_job"] = json!(null);
+        let parsed: TaskInstanceCollectionResponse = serde_json::from_value(response).unwrap();
+        assert!(parsed.task_instances[0].triggerer_job.is_none());
+    }
 }
