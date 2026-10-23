@@ -3,6 +3,7 @@ use reqwest::Method;
 
 use super::model;
 use super::V2Client;
+use crate::client::dag_filter::DagFilter;
 use crate::client::read_json;
 use crate::error::Result;
 
@@ -10,6 +11,10 @@ const PAGE_SIZE: usize = 50;
 
 impl V2Client {
     pub async fn fetch_dags(&self) -> Result<model::dag::DagList> {
+        self.fetch_dags_filtered(&DagFilter::default()).await
+    }
+
+    pub async fn fetch_dags_filtered(&self, filter: &DagFilter) -> Result<model::dag::DagList> {
         let mut all_dags = Vec::new();
         let mut offset = 0;
         let limit = PAGE_SIZE;
@@ -19,7 +24,8 @@ impl V2Client {
             let request = self
                 .base_api(Method::GET, "dags")
                 .await?
-                .query(&[("limit", limit.to_string()), ("offset", offset.to_string())]);
+                .query(&[("limit", limit.to_string()), ("offset", offset.to_string())])
+                .query(&filter.query());
             let response = self.execute(request).await?;
             let page: model::dag::DagList = read_json(response, "DAGs response").await?;
 
@@ -30,7 +36,7 @@ impl V2Client {
             debug!("Fetched {fetched_count} DAGs, offset: {offset}, total: {total_entries}");
 
             let total_usize = usize::try_from(total_entries).unwrap_or(usize::MAX);
-            if fetched_count < limit || all_dags.len() >= total_usize {
+            if fetched_count < limit || offset + fetched_count >= total_usize {
                 break;
             }
 
@@ -42,6 +48,9 @@ impl V2Client {
             all_dags.len(),
             total_entries
         );
+
+        all_dags.retain(|dag| filter.matches_name(&dag.dag_id));
+        total_entries = i64::try_from(all_dags.len()).unwrap_or(i64::MAX);
 
         Ok(model::dag::DagList {
             dags: all_dags,

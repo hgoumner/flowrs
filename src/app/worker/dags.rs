@@ -22,6 +22,7 @@ pub async fn handle_update_dags_and_stats(
     client: &Arc<FlowrsClient>,
     env_name: &str,
 ) {
+    let filter = app.lock().unwrap().dag_filter.clone();
     // Snapshot cached DAG IDs from the originating environment for the stats request
     let cached_dag_ids: Vec<DagId> = {
         let app_lock = app.lock().unwrap();
@@ -35,7 +36,7 @@ pub async fn handle_update_dags_and_stats(
 
     if cached_dag_ids.is_empty() {
         // Cold start: fetch DAGs first, then stats with fresh IDs
-        let dag_list_result = client.list_dags().await;
+        let dag_list_result = client.list_dags_filtered(&filter).await;
 
         let dag_ids: Vec<DagId> = {
             let mut app = app.lock().unwrap();
@@ -75,10 +76,11 @@ pub async fn handle_update_dags_and_stats(
         }
     } else {
         // Warm cache: fetch DAG list and stats concurrently using cached IDs
-        let (dag_list_result, dag_stats_result) = tokio::join!(client.list_dags(), async {
-            let refs: Vec<&str> = cached_dag_ids.iter().map(AsRef::as_ref).collect();
-            client.get_dag_stats(refs).await
-        });
+        let (dag_list_result, dag_stats_result) =
+            tokio::join!(client.list_dags_filtered(&filter), async {
+                let refs: Vec<&str> = cached_dag_ids.iter().map(AsRef::as_ref).collect();
+                client.get_dag_stats(refs).await
+            });
 
         let mut app = app.lock().unwrap();
 

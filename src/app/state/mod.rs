@@ -15,6 +15,7 @@ use crate::app::model::popup::warning::WarningPopup;
 use crate::app::model::{FilterableTable, Model};
 use crate::app::worker::WorkerMessage;
 use environment_state::EnvironmentStateContainer;
+use flowrs_airflow::client::dag_filter::DagFilter;
 use flowrs_config::FlowrsConfig;
 use throbber_widgets_tui::ThrobberState;
 
@@ -23,6 +24,7 @@ use super::model::{config::ConfigModel, logs::LogModel, taskinstances::TaskInsta
 #[derive(Debug)]
 pub struct App {
     pub config: FlowrsConfig,
+    pub dag_filter: DagFilter,
     pub environment_state: EnvironmentStateContainer,
     pub nav_context: NavigationContext,
     pub dags: DagModel,
@@ -81,6 +83,7 @@ impl App {
 
         Self {
             config,
+            dag_filter: DagFilter::default(),
             environment_state: EnvironmentStateContainer::new(),
             nav_context,
             dags: DagModel::new(poll_tick_multiplier),
