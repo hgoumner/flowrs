@@ -39,7 +39,15 @@ impl FlowrsApp {
         match &self.command {
             Some(FlowrsCommand::Run(cmd)) => cmd.run().await,
             Some(FlowrsCommand::Config(cmd)) => cmd.run().await,
-            None => RunCommand { file: None }.run().await,
+            None => {
+                RunCommand {
+                    file: None,
+                    dag_id_pattern: None,
+                    tag: None,
+                }
+                .run()
+                .await
+            }
         }
     }
 }

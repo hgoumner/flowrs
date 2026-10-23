@@ -1,3 +1,5 @@
+#[cfg(test)]
+mod dag_filter_tests;
 mod dag_ops;
 mod dagrun_ops;
 mod dagstats_ops;

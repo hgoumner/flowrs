@@ -12,6 +12,7 @@ use crate::app::run_app;
 use crate::app::state::App;
 use crate::CONFIG_PATHS;
 use anyhow::Result;
+use flowrs_airflow::client::dag_filter::DagFilter;
 use flowrs_airflow::managed_services::expand::{expand_managed_services, ManagedServiceConfig};
 use flowrs_config::FlowrsConfig;
 
@@ -50,10 +51,17 @@ impl Log for FileLogger {
 pub struct RunCommand {
     #[clap(short, long)]
     pub file: Option<String>,
+    /// Only load DAG IDs matching this case-insensitive name or '*' pattern
+    #[clap(long, value_name = "PATTERN", value_parser = non_empty_filter)]
+    pub dag_id_pattern: Option<String>,
+    /// Only load DAGs with this exact tag (combined with the name filter)
+    #[clap(long, value_name = "TAG", value_parser = non_empty_filter)]
+    pub tag: Option<String>,
 }
 
 impl RunCommand {
     pub async fn run(&self) -> Result<()> {
+        let dag_filter = DagFilter::new(self.dag_id_pattern.clone(), self.tag.clone())?;
         // setup logging
         if let Ok(log_level) = std::env::var("FLOWRS_LOG") {
             setup_logging(&log_level)?;
@@ -96,13 +104,22 @@ impl RunCommand {
         let mut terminal = ratatui::init();
         std::io::stdout().execute(EnableFocusChange)?;
 
-        let app = App::new_with_errors_and_warnings(config, errors, warnings);
+        let mut app = App::new_with_errors_and_warnings(config, errors, warnings);
+        app.dag_filter = dag_filter;
         let result = run_app(&mut terminal, Arc::new(Mutex::new(app))).await;
 
         info!("Shutting down the terminal...");
         std::io::stdout().execute(DisableFocusChange)?;
         ratatui::restore();
         result
+    }
+}
+
+fn non_empty_filter(value: &str) -> Result<String, String> {
+    if value.trim().is_empty() {
+        Err("filter must not be empty".to_string())
+    } else {
+        Ok(value.to_string())
     }
 }
 
@@ -130,4 +147,27 @@ fn setup_logging(log_level: &str) -> Result<()> {
     log::set_boxed_logger(Box::new(logger))?;
     log::set_max_level(level);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RunCommand;
+    use clap::Parser;
+
+    #[test]
+    fn parses_name_and_tag_filters_together() {
+        let args =
+            RunCommand::try_parse_from(["run", "--dag-id-pattern", "team_*", "--tag", "finance"])
+                .unwrap();
+        assert_eq!(args.dag_id_pattern.as_deref(), Some("team_*"));
+        assert_eq!(args.tag.as_deref(), Some("finance"));
+    }
+
+    #[test]
+    fn rejects_empty_filters() {
+        for flag in ["--dag-id-pattern", "--tag"] {
+            assert!(RunCommand::try_parse_from(["run", flag, ""]).is_err());
+            assert!(RunCommand::try_parse_from(["run", flag, "   "]).is_err());
+        }
+    }
 }

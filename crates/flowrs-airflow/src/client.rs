@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod base;
+pub mod dag_filter;
 pub mod v1;
 pub mod v2;
 

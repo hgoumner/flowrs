@@ -1,4 +1,5 @@
 use anyhow::Result;
+use flowrs_airflow::client::dag_filter::DagFilter;
 
 use crate::airflow::client::convert_v1::v1_dag_collection_to_dag_list;
 use crate::airflow::client::convert_v2::v2_dag_list_to_dag_list;
@@ -6,14 +7,22 @@ use crate::airflow::client::FlowrsClient;
 use crate::airflow::model::common::{Dag, DagList};
 
 impl FlowrsClient {
+    #[allow(
+        dead_code,
+        reason = "unfiltered API used by library consumers and integration tests"
+    )]
     pub async fn list_dags(&self) -> Result<DagList> {
+        self.list_dags_filtered(&DagFilter::default()).await
+    }
+
+    pub async fn list_dags_filtered(&self, filter: &DagFilter) -> Result<DagList> {
         match self {
             Self::V1(client) => {
-                let response = client.fetch_dags().await?;
+                let response = client.fetch_dags_filtered(filter).await?;
                 Ok(v1_dag_collection_to_dag_list(response))
             }
             Self::V2(client) => {
-                let response = client.fetch_dags().await?;
+                let response = client.fetch_dags_filtered(filter).await?;
                 Ok(v2_dag_list_to_dag_list(response))
             }
         }

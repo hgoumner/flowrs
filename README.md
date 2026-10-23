@@ -39,6 +39,29 @@ cargo install flowrs-tui --locked
 
 ## Usage
 
+### Loading only selected DAGs
+
+Filter DAGs before downloading them from Airflow:
+
+```bash
+flowrs run --dag-id-pattern 'my_system'
+flowrs run --dag-id-pattern 'my_system_*_daily'
+flowrs run --tag 'finance'
+flowrs run --dag-id-pattern 'my_system_*' --tag 'finance'
+```
+
+Names refer to DAG IDs, not display names. Without `*`, the name matches a
+case-insensitive substring. With `*`, the pattern matches the whole ID and `*`
+stands for zero or more characters. Other characters, including `_` and `.`,
+are literal. Quote patterns to prevent your shell from expanding `*`.
+Tags match an exact tag name. When both options are given, both must match.
+
+Filters apply to the first load and all subsequent refreshes, including when
+switching servers, for the current session. Airflow filters the paginated API
+requests, and Flowrs fetches statistics only for matching DAGs. The `/` filter
+in the TUI further narrows the downloaded subset; it cannot reveal DAGs
+excluded at startup. Restart without these options to load all DAGs again.
+
 ### Managed Airflow services
 
 The easiest way to user `flowrs` is with a managed Airflow service. The currently supported managed services are:
