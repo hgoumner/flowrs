@@ -12,8 +12,8 @@ use crate::app::run_app;
 use crate::app::state::App;
 use crate::CONFIG_PATHS;
 use anyhow::Result;
-use flowrs_airflow::managed_services::expand::{expand_managed_services, ManagedServiceConfig};
 use flowrs_airflow::client::dag_filter::DagFilter;
+use flowrs_airflow::managed_services::expand::{expand_managed_services, ManagedServiceConfig};
 use flowrs_config::FlowrsConfig;
 
 struct FileLogger {

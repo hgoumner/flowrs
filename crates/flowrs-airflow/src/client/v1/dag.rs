@@ -36,7 +36,7 @@ impl V1Client {
             debug!("Fetched {fetched_count} DAGs, offset: {offset}, total: {total_entries}");
 
             let total_usize = usize::try_from(total_entries).unwrap_or(usize::MAX);
-            if fetched_count < limit || offset + fetched_count >= total_usize {
+            if fetched_count < limit || all_dags.len() >= total_usize {
                 break;
             }
 

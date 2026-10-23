@@ -77,6 +77,17 @@ mod tests {
     }
 
     #[test]
+    fn leading_trailing_and_repeated_wildcards() {
+        let suffix = DagFilter::new(Some("*_daily".into()), None).unwrap();
+        assert!(suffix.matches_name("orders_daily"));
+        assert!(!suffix.matches_name("orders_daily_extra"));
+        let contains = DagFilter::new(Some("*orders**".into()), None).unwrap();
+        assert!(contains.matches_name("team_orders_daily"));
+        let all = DagFilter::new(Some("*".into()), None).unwrap();
+        assert!(all.matches_name("any_dag"));
+    }
+
+    #[test]
     fn query_combines_name_and_tag_without_changing_tag() {
         let filter =
             DagFilter::new(Some("team_*".into()), Some("daily & important".into())).unwrap();
@@ -88,9 +99,10 @@ mod tests {
             ]
         );
         let unfiltered = DagFilter::default();
-        assert!(unfiltered.query().is_empty());
+        assert_eq!(unfiltered.query(), Vec::<(&str, String)>::new());
         assert!(unfiltered.matches_name("anything"));
         let tags_only = DagFilter::new(None, Some("daily".into())).unwrap();
+        assert_eq!(tags_only.query(), vec![("tags", "daily".to_string())]);
         assert!(tags_only.matches_name("anything"));
     }
 }
